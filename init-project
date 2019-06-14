@@ -1,0 +1,135 @@
+#!/bin/bash
+
+function printHelp {
+    echo -e "Usage: init-project [OPTIONS] <PROJECT_NAME> [<DESCRIPTION>]" >&2
+    echo -e "\n    Available Options: \n"                                  >&2
+    echo -e "        -l [C|C++|ASSEMBLY]         Specify project language" >&2
+    echo -e "\n" >&2
+}
+
+# Make sure project name has been specified, or at least some arguments have
+# been passed in at all.
+if [[ "$#" -eq 0 ]]
+then
+    echo -e "[Error] Project name required\n" >&2
+    printHelp
+    exit 1
+fi
+
+# First, check to see whether the user is requesting the help menu
+if [[ "$1" = -h ]] || [[ "$1" = --help ]]
+then
+    printHelp
+    exit 0
+fi
+
+PROJECT_NAME=untitled
+LANGUAGE=C
+EXT=c
+HDR=h
+DESCRIPTION=
+
+# Get options
+while [[ -n "$1" ]]
+do
+    case "$1" in
+       # Set project language. This will determine the project directory
+       # structure, as well as the type of file template used.
+      -l) shift
+          if [[ "$1" = C ]]; then
+              LANGUAGE=C
+          elif [[ "$1" = C++ ]]; then
+              LANGUAGE=C++
+          elif [[ "$1" = ASSEMBLY ]]; then
+              LANGUAGE=ASSEMBLY
+          fi
+
+          # Echo project language
+          echo "Language: $LANGUAGE"
+          
+          shift ;;
+       
+       # If the argument doesn't match any of the options, it's probably a
+       # regular argument. Break out of the option loop.
+       *) break ;;
+    esac
+done
+
+# Set file extension
+if [[ $LANGUAGE = C ]]
+then
+    EXT=c
+    HDR=h
+elif [[ $LANGUAGE = C++ ]]
+then
+    EXT=cpp
+    HDR=hpp
+elif [[ $LANGUAGE = ASSEMBLY ]]
+then
+    EXT=asm
+    HDR=inc
+fi
+
+# Get project name
+if [[ -n "$1" ]]
+then
+    PROJECT_NAME="$1"
+    shift
+
+    # Make sure project directory does not already exist
+    if [[ -d "$PROJECT_NAME" ]]
+    then
+        echo "[Error] Project directory already exists" >&2
+        exit 1
+    fi
+else
+    echo "[Error] Project name required" >$2
+fi
+
+# If there is another argument, get the project's description
+if [[ -n "$1" ]]
+then
+    DESCRIPTION="$1"
+
+    echo "Project description: $DESCRIPTION"
+fi
+
+# Create project directory and 'cd' into it
+mkdir "$PROJECT_NAME" && cd "$PROJECT_NAME"
+
+# Create project directories
+if [[ $LANGUAGE = C ]] || [[ $LANGUAGE = C++ ]] || [[ $LANGUAGE = ASSEMBLY ]]
+then
+    mkdir src include doc
+    # TODO: Copy makefile into directory
+    cp -f -u ~/Templates/$LANGUAGE/Makefile ./Makefile
+
+    # Copy file templates into directory
+    cp -f -u ~/Templates/$LANGUAGE/main.$EXT ./src/main.$EXT
+
+    # Copy header file templates into directory
+    cp -f -u ~/Templates/$LANGUAGE/main.$HDR ./include/$PROJECT_NAME.$HDR
+    
+    # Replace template arguments
+    sed -i -n -E "s/\{\{PROJECT_NAME\}\}/$PROJECT_NAME/;/.*/p" ./Makefile
+    sed -i -n -E "s/\{\{PROJECT_NAME\}\}/$PROJECT_NAME/;/.*/p" ./src/main.$EXT
+    sed -i -n -E "s/\{\{PROJECT_NAME\}\}/$PROJECT_NAME/;/.*/p" ./include/$PROJECT_NAME.$HDR
+
+    # Set date on assembly language files
+    if [[ $LANGUAGE = ASSEMBLY ]]
+	then
+        sed -i -n -E "s/\{\{DATE\}\}/$(date)/;/.*/p" ./src/main.$EXT
+	    sed -i -n -E "s/\{\{DATE\}\}/$(date)/;/.*/p" ./include/$PROJECT_NAME.$HDR
+
+        # If a project description was specified, pass it on
+        if [[ -n "$DESCRIPTION" ]]
+        then
+            sed -i -n -E "s/\{\{DESCRIPTION\}\}/$DESCRIPTION/;/.*/p" ./src/main.$EXT
+            sed -i -n -E "s/\{\{DESCRIPTION\}\}/$DESCRIPTION/;/.*/p" ./include/$PROJECT_NAME.$HDR
+        fi
+    fi
+fi
+
+# Initialize Git repository
+git init
+
